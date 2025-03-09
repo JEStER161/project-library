@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
 
+	"strings"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo"
-
-	"strings"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Book struct {
@@ -38,6 +38,21 @@ type Author struct {
 	Created_at    time.Time `json:"created_at"`
 }
 
+type User struct {
+	User_id       int       `json:"user_id"`
+	Login         string    `json:"login"`
+	Email         string    `json:"email"`
+	Password      string    `json:"password"`
+	First_name    string    `json:"first_name"`
+	Surname       string    `json:"surname"`
+	Patronymic    string    `json:"patronymic"`
+	Date_of_birth string    `json:"date_of_birth"`
+	Phone         string    `json:"phone"`
+	Role          string    `json:"role"`
+	Created_at    time.Time `json:"created_at"`
+	Updated_at    time.Time `json:"updated_at"`
+}
+
 type Response struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
@@ -53,12 +68,72 @@ func ConnectDB() {
 		log.Fatal("Не удалось подключиться к БД:", err)
 	}
 	DB = pool
-	fmt.Println("Подключение к БД установлено!")
+	log.Println("Подключение к БД установлено!")
 }
 
 func separation_authors(authors string) []string {
 	res := strings.Split(authors, ",")
 	return res
+}
+
+// Хэширование пароля
+func HashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hash), err
+}
+
+// Проверка пароля
+func CheckPasswordHash(password string, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func AddUser(context echo.Context) error {
+	var user User
+
+	if err := context.Bind(&user); err != nil {
+		return context.JSON(http.StatusBadRequest, Response{
+			Status:  "Error",
+			Message: "Invalid request payload",
+		})
+	}
+
+	log.Println(user)
+
+	// Проверка на пустой контент
+	if user.Login == "" {
+		return context.JSON(http.StatusBadRequest, Response{
+			Status:  "Error",
+			Message: "Name are required",
+		})
+	}
+
+	//Хэширование пароля пользователя
+	hash_password, err_password := HashPassword(user.Password)
+	if err_password != nil {
+		return context.JSON(http.StatusBadRequest, Response{
+			Status:  "Error",
+			Message: "Failed password hashing",
+		})
+	}
+
+	//Запрос на добавление пользователя в бд
+	query := `insert into "library".users(login, email, password_hash, first_name, surname, patronymic, date_of_birth,
+										phone, "role", created_at)
+									values($1, $2, $3, $4, $5, $6, $7, $8, $9, Now()) returning user_id, created_at, updated_at;`
+	err_query := DB.QueryRow(context.Request().Context(), query, user.Login, user.Email, hash_password, user.First_name,
+		user.Surname, user.Patronymic, user.Date_of_birth, user.Phone, user.Role).Scan(&user.User_id, &user.Created_at, &user.Updated_at)
+	if err_query != nil {
+
+		log.Println(err_query)
+
+		return context.JSON(http.StatusInternalServerError, Response{
+			Status:  "Error",
+			Message: "Could not add the user",
+		})
+	}
+
+	return context.JSON(http.StatusOK, user)
 }
 
 func AddBook(context echo.Context) error {
@@ -79,11 +154,9 @@ func AddBook(context echo.Context) error {
 		})
 	}
 
-	fmt.Println(book.Author)
 	authors := separation_authors(book.Author)
-	fmt.Println(authors)
 
-	fmt.Println(book)
+	log.Println(book)
 
 	// Проверка на пустой контент
 	if book.Title == "" {
@@ -102,7 +175,7 @@ func AddBook(context echo.Context) error {
 		book.Cover_image).Scan(&book.Book_id, &book.Created_at, &book.Updated_at)
 
 	if err_book != nil {
-		fmt.Println(err_book)
+		log.Println(err_book)
 		tx.Rollback(context.Request().Context())
 		return context.JSON(http.StatusInternalServerError, Response{
 			Status:  "Error",
@@ -112,30 +185,28 @@ func AddBook(context echo.Context) error {
 
 	// Запрос на добавление связи между авторами и книгой
 	for i := 0; i < len(authors); i++ {
-		fmt.Println(authors[i])
 		var author_id int
 		err_1 := tx.QueryRow(context.Request().Context(), `select author_id from "library".authors where name = $1;`, authors[i]).Scan(&author_id)
 		if err_1 != nil {
-			fmt.Println(err_1)
+			log.Println(err_1)
 			tx.Rollback(context.Request().Context())
 			return context.JSON(http.StatusInternalServerError, Response{
 				Status:  "Error",
 				Message: "There is no author with name: " + authors[i],
 			})
 		}
-		fmt.Println(book.Book_id, author_id)
 
 		query_book_author := `insert into "library".book_authors (book_id, author_id) values($1, $2);`
 		_, err_book_author := tx.Exec(context.Request().Context(), query_book_author, book.Book_id, author_id)
 		if err_book_author != nil {
 			tx.Rollback(context.Request().Context())
-			fmt.Println(err_book_author)
+			log.Println("Ошибка запроса к БД", err_book_author)
 			return context.JSON(http.StatusInternalServerError, Response{
 				Status:  "Error",
 				Message: "Could not add the book_author",
 			})
 		}
-		fmt.Println("Запись добавлена")
+		log.Println("Запись добавлена")
 	}
 
 	error_3 := tx.Commit(context.Request().Context())
@@ -149,16 +220,6 @@ func AddBook(context echo.Context) error {
 	return context.JSON(http.StatusOK, book)
 }
 
-/*func Find_Book_from_author(context echo.Context) error {
-	var slice []Book
-	author_name := context.Param("name")
-
-	query := `Select `
-
-
-
-}*/
-
 func AddAuthor(context echo.Context) error {
 	var author Author
 
@@ -169,7 +230,7 @@ func AddAuthor(context echo.Context) error {
 		})
 	}
 
-	fmt.Println(author)
+	log.Println(author)
 
 	// Проверка на пустой контент
 	if author.Name == "" {
@@ -186,7 +247,7 @@ func AddAuthor(context echo.Context) error {
 		author.Date_of_birth, author.Country, author.Bio).Scan(&author.Author_id)
 
 	if err_author != nil {
-		fmt.Println(err_author)
+		log.Println("Ошибка запроса к БД", err_author)
 		return context.JSON(http.StatusInternalServerError, Response{
 			Status:  "Error",
 			Message: "Could not add the author",
@@ -204,7 +265,7 @@ func main() {
 
 	e.POST("/add_book", AddBook)
 	e.POST("/add_author", AddAuthor)
-	//e.GET("/find_Book_from_author/:name", Find_Book_from_author)
+	e.POST("/add_user", AddUser)
 
 	e.Start(":8080")
 
