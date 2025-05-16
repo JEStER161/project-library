@@ -4,7 +4,7 @@ import (
 	"project_library/config"
 	"project_library/utils"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 
 	"log"
 	"net/http"
@@ -37,6 +37,14 @@ func separation_authors(authors string) []string {
 // Добавление новой книги
 func AddBook(context echo.Context) error {
 	var book Book
+
+	if context.Get("role_user") != "admin" {
+		return context.JSON(http.StatusBadRequest, utils.Response{
+			Status:  "Error",
+			Message: "You don't have sufficient rights",
+		})
+	}
+
 	tx, eror := config.DB.Begin(context.Request().Context())
 	if eror != nil {
 		return context.JSON(http.StatusBadRequest, utils.Response{

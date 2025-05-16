@@ -5,7 +5,7 @@ import (
 	"project_library/config"
 	"project_library/utils"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 func Profile(context echo.Context) error {

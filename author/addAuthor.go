@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 type Author struct {
@@ -23,6 +23,13 @@ type Author struct {
 // Добавление нового автора
 func AddAuthor(context echo.Context) error {
 	var author Author
+
+	if context.Get("role_user").(string) != "admin"{
+		return context.JSON(http.StatusBadRequest, utils.Response{
+			Status:  "Error",
+			Message: "You don't have sufficient rights",
+		})
+	}
 
 	if err := context.Bind(&author); err != nil {
 		return context.JSON(http.StatusBadRequest, utils.Response{

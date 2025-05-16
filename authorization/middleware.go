@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 type Claims struct {
@@ -70,6 +70,7 @@ func MiddleWare(next echo.HandlerFunc) echo.HandlerFunc {
 
 		// Передаем user_id в контекст запроса
 		context.Set("user_id", claims.User_id)
+		context.Set("role_user", claims.Role_user)
 
 		// Вызываем следующий обработчик
 		return next(context)

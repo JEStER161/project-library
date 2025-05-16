@@ -22,11 +22,11 @@ type Login struct {
 
 // генерация jwt
 func Generate_JWT(login Login) (string, error) {
-	
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": login.User_id,
-		"role":    login.Role_user,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(), // Токен истекает через 24 часа
+		"user_id":   login.User_id,
+		"role_user": login.Role_user,
+		"exp":       time.Now().Add(time.Hour * 24).Unix(), // Токен истекает через 24 часа
 	})
 	// Подписываем токен секретным ключом
 	return token.SignedString(secretKey)

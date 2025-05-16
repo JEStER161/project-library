@@ -6,7 +6,7 @@ import (
 	"project_library/config"
 	"project_library/utils"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 func GetBook(context echo.Context) error {
@@ -14,7 +14,7 @@ func GetBook(context echo.Context) error {
 	book_id := context.Param("book_id")
 
 	//Получение данных о книге, кроме ее авторов
-	query_getBook := `select title, genre, isbn, total_copies, available_copies, to_char(published_date , 'YYYY-MM-DD'), publisher, description
+	query_getBook := `select title, genre, isbn, total_copies, available_copies, to_char(published_date , 'YYYY-MM-DD'), publisher, description, cover_image
 					from "library".books
 					where book_id = $1;`
 	rows, err := config.DB.Query(context.Request().Context(), query_getBook, book_id)
@@ -27,7 +27,7 @@ func GetBook(context echo.Context) error {
 	defer rows.Close()
 
 	rows.Next()
-	if err := rows.Scan(&book.Title, &book.Genre, &book.Isbn, &book.Total_copies, &book.Available_copies, &book.Published_date, &book.Publisher, &book.Description); err != nil {
+	if err := rows.Scan(&book.Title, &book.Genre, &book.Isbn, &book.Total_copies, &book.Available_copies, &book.Published_date, &book.Publisher, &book.Description, &book.Cover_image); err != nil {
 		return context.JSON(http.StatusInternalServerError, utils.Response{
 			Status:  "Error",
 			Message: err.Error(),
@@ -62,7 +62,6 @@ func GetBook(context echo.Context) error {
 		authors = append(authors, name)
 	}
 
-	log.Println(authors)
 	author_result := ""
 
 	//Соедиение всех полученных авторов в одну строку
@@ -71,6 +70,7 @@ func GetBook(context echo.Context) error {
 	}
 
 	book.Author = author_result
+	log.Println(book)
 
 	return context.JSON(http.StatusOK, book)
 }
