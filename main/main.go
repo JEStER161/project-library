@@ -31,6 +31,7 @@ func main() {
 	e.GET("/all_borrowing", user.AllBorrowing, authorization.MiddleWare) //Получение ВСЕХ выдач книг
 	e.GET("/get_book/:book_id", book.GetBook)                            //Получение профиля книги
 	e.GET("/search", book.SearchLine)                                    // Поисковая строка
+	e.GET("/home", book.AllBook);
 	e.GET("/get_author/:author_id", author.GetAuthor)                    //Получение профиля автора
 
 	e.Start(":8080")
